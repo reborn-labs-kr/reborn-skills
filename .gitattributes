@@ -1,0 +1,8 @@
+# 맥에서 두 번 눌러 도는 파일이다. CRLF 가 섞이면 셔뱅 뒤에 \r 이 붙어
+# "bad interpreter" 로 죽는다 — 고객 화면에는 이유가 안 보인다.
+*.command text eol=lf
+install.mjs text eol=lf
+# cmd.exe 는 CRLF 여야 안전하다.
+*.bat      text eol=crlf
+*.md       text eol=lf
+*.json     text eol=lf

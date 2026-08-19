@@ -1,0 +1,43 @@
+{
+  "name": "reborn-skills",
+  "version": "1.1.0",
+  "description": "클로드 코드 필수 스킬 5개를 한 번에 설치하고, 진짜 되는지 확인까지 합니다 — agent-browser · find-skills · GSD · taste · mcp-builder",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skills",
+    "agent-skills",
+    "installer",
+    "agent-browser",
+    "mcp"
+  ],
+  "homepage": "https://rebornlabs.kr",
+  "bugs": {
+    "url": "https://mobility.rebornlabs.kr/cs"
+  },
+  "license": "MIT",
+  "author": "REBORN LABS",
+  "type": "module",
+  "bin": {
+    "reborn-skills": "install.mjs"
+  },
+  "files": [
+    "install.mjs",
+    "README.md",
+    "안내스킬.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node install.mjs --self-test",
+    "check": "node install.mjs --check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reborn-labs-kr/reborn-skills"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
