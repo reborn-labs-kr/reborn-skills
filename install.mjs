@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 클로드 코드 필수 스킬 5개 설치기 — **설치하고, 진짜 되는지 확인까지 한다.**
+ * 클로드 코드 필수 스킬 6개 설치기 — **설치하고, 진짜 되는지 확인까지 한다.**
  *
  *   node install.mjs              설치 + 검증
  *   node install.mjs --check      설치하지 않고 지금 상태만 본다
@@ -8,7 +8,7 @@
  *   node install.mjs --self-test  검사기 자체 시험(설치 안 함)
  *
  * ★★왜 이걸 만드나
- *   남들은 "이 5개 설치하세요" 목록을 준다. 고객은 다섯 번 설치하고,
+ *   남들은 "이거 설치하세요" 목록을 준다. 고객은 여섯 번 설치하고,
  *   **되는지는 모른 채** 넘어간다. "설치했는데 안 되네"가 거기서 나온다.
  *   이 설치기의 값은 설치가 아니라 **설치 뒤에 다시 확인하는 것**이다.
  *
@@ -107,7 +107,67 @@ const 스킬들 = [
     설치: ["skills", "add", "anthropics/skills", "--skill", "mcp-builder", "-g", "-a", "claude-code", "-y"],
     검증이름: "mcp-builder",
   },
+  {
+    /* ★여섯 번째. 앞의 다섯과 **설치 방식이 다르다** — 파이썬 패키지다.
+         공식 명령: `pip install graphifyy && graphify install`
+         (PyPI 이름이 임시로 `graphifyy` 다. CLI·스킬 이름은 그대로 `graphify`.)
+
+       ★우리는 `python -m` 으로 부른다. 원저작자 README 도 인정하듯 윈도우에서
+         `graphify` 실행파일이 PATH 에 안 잡히는 일이 흔하다. `python -m graphify`
+         는 그 문제를 통째로 비켜 간다 — 같은 코드를 부르면서 PATH 를 안 탄다.
+
+       ★검증축이 **파일 하나뿐**이다(검증축:"파일").
+         graphify 는 자기 CLI 로 스킬을 심으므로 `skills list -g` 에 안 뜬다.
+         두 축을 다 요구하면 **정상 설치가 전건 '반쪽'으로 떨어진다.**
+         축을 줄인 게 아니라, **이 스킬에는 그 축이 애초에 없다.** */
+    id: "graphify",
+    이름: "그래피파이",
+    한줄: "코드베이스 전체를 지식그래프로 만들어, 뒤지는 대신 물어보게 한다",
+    출처: "Graphify-Labs/graphify",
+    만든곳: "Graphify Labs",
+    라이선스: "Apache-2.0",
+    설치기: "python",
+    설치: [
+      ["-m", "pip", "install", "--upgrade", "graphifyy"],
+      ["-m", "graphify", "install", "--platform", "claude"],
+    ],
+    검증이름: "graphify",
+    검증축: "파일",
+    손으로: "pip install graphifyy && graphify install",
+  },
 ];
+
+/* ── 파이썬 찾기 ─────────────────────────────────────────────────────────
+   ★이름을 믿지 않는다. **실제로 돌려 보고** 고른다.
+     윈도우의 `python` 은 마이크로소프트 스토어 껍데기인 경우가 있고(실행하면 스토어가 열린다),
+     같은 PC 에 파이썬이 둘 있으면 하나는 모듈이 텅 비어 있기도 하다(우리 PC 실측).
+     그래서 후보를 순서대로 **`import pip` 까지 시켜 보고** 통과한 첫 놈을 쓴다. */
+export const 파이썬후보 = () => (윈도우
+  ? [["py", ["-3"]], ["python", []], ["python3", []]]
+  : [["python3", []], ["python", []]]);
+
+/* ★★셸을 쓰지 않는다. **여기서 한 번 크게 데었다**(2026-08-21).
+     처음엔 `npx` 와 똑같이 `shell: 셸필요()` 를 줬는데, 윈도우에서는 그게 `cmd /c` 다.
+     그러면 `-c "import pip,sys;print(...)"` 의 **세미콜론에서 cmd 가 잘라 버린다** —
+     파이썬은 `-c import` 만 받고 죽고, 우리는 "파이썬을 찾지 못했습니다"를 본다.
+     **파이썬이 멀쩡히 깔린 PC에서 그랬다.**
+   → `python.exe`·`py.exe` 는 진짜 실행파일이라 셸이 애초에 필요 없다. 셸을 빼면
+     따옴표 문제가 통째로 사라진다. 덤으로 인자에 **셸 특수문자를 아예 안 쓴다**(아래 시험이 지킨다). */
+const 파이썬실행 = (cmd, args, timeout = 60000) =>
+  spawnSync(cmd, args, { encoding: "utf8", timeout, windowsHide: true, shell: false, input: "" });
+
+export function 파이썬찾기() {
+  for (const [cmd, pre] of 파이썬후보()) {
+    //: ① 진짜 파이썬 3 인가 (윈도우 `python3` 는 마이크로소프트 스토어 껍데기다 — 여기서 걸린다)
+    const v = 파이썬실행(cmd, [...pre, "--version"]);
+    if (v.status !== 0) continue;
+    if (!/Python 3/.test(String(v.stdout || "") + String(v.stderr || ""))) continue;
+    //: ② pip 이 있는가. 같은 PC 에 파이썬이 둘이면 하나는 텅 비어 있기도 하다(실측).
+    if (파이썬실행(cmd, [...pre, "-c", "import pip"]).status !== 0) continue;
+    return { cmd, pre };
+  }
+  return null;
+}
 
 /* ── 검증 ①: CLI 가 아는가 ──────────────────────────────────────────────
    `skills list -g` 를 한 번만 부르고 결과를 재사용한다. 스킬마다 부르면 5배 느리다. */
@@ -160,6 +220,16 @@ export function 상태(s, 목록) {
   const 후보 = [s.검증이름, ...(s.검증대안 || [])];
   const cli = 후보.find((n) => 목록.이름들.includes(n)) || null;
   const 파일 = 후보.map((n) => ({ n, r: 파일로있나(n) })).find((x) => x.r.ok) || null;
+
+  /* ★어떤 스킬은 **CLI 목록 축이 아예 없다**(자기 설치기로 심는 것 — graphify).
+       두 축을 요구하면 정상 설치가 전건 '반쪽'으로 떨어진다.
+       ★축을 줄이는 건 위험한 일이라 **스킬이 명시적으로 선언할 때만** 줄인다.
+         기본값은 여전히 두 축이다 — 모르는 스킬을 슬쩍 봐주지 않는다. */
+  if (s.검증축 === "파일") {
+    return 파일
+      ? { 등급: "완료", 설명: `파일 확인 (${파일.n})`, 경로: 파일.r.경로 }
+      : { 등급: "없음", 설명: "설치되지 않았다" };
+  }
 
   if (cli && 파일) return { 등급: "완료", 설명: `목록·파일 둘 다 확인 (${cli})`, 경로: 파일.r.경로 };
   if (!cli && !파일) return { 등급: "없음", 설명: "설치되지 않았다" };
@@ -234,10 +304,43 @@ if (자기시험) {
   T("★목록에만 있고 파일이 없으면 '반쪽'", 상태({ 검증이름: 유령 }, 목록가짜).등급 === "반쪽");
   T("★둘 다 없으면 '없음'", 상태({ 검증이름: "절대없는스킬" }, { 이름들: [] }).등급 === "없음");
 
-  T("스킬 5개가 정의돼 있다", 스킬들.length === 5);
+  T("스킬 6개가 정의돼 있다", 스킬들.length === 6);
   T("★전부 출처와 라이선스를 갖고 있다", 스킬들.every((s) => s.출처 && s.라이선스 && s.만든곳));
   T("★설치 명령이 전부 있다", 스킬들.every((s) => Array.isArray(s.설치) && s.설치.length));
-  T("★벤더링하지 않는다(전부 npx 호출)", 스킬들.every((s) => !s.파일복사));
+  T("★벤더링하지 않는다(파일을 동봉하지 않는다)", 스킬들.every((s) => !s.파일복사));
+
+  /* ── graphify(6번째) — 앞의 다섯과 **설치·검증이 둘 다 다르다.**
+        다르다는 걸 시험으로 못 박아 둔다. 안 그러면 다음 사람이 "통일"하려다 깨뜨린다. ── */
+  const gfy = 스킬들.find((x) => x.id === "graphify");
+  T("★graphify 만 파이썬 설치기다", gfy.설치기 === "python" &&
+    스킬들.filter((x) => x.설치기 === "python").length === 1);
+  T("★graphify 설치는 명령 두 개(설치 → 심기)다",
+    Array.isArray(gfy.설치[0]) && gfy.설치.length === 2);
+  T("★`python -m` 으로 부른다(윈도우 PATH 문제를 비켜 간다)",
+    gfy.설치.every((명) => 명[0] === "-m"));
+  T("★PyPI 이름은 임시로 graphifyy 다(CLI 는 graphify)",
+    gfy.설치[0].includes("graphifyy") && gfy.검증이름 === "graphify");
+  T("★막혔을 때 손으로 돌릴 명령이 적혀 있다", typeof gfy.손으로 === "string" && gfy.손으로.length > 10);
+
+  /* ★2026-08-21 실사고: 파이썬 탐지에 `shell:true` 를 줬다가 cmd 가 세미콜론에서 잘라
+       **파이썬이 멀쩡히 깔린 PC에서 "파이썬을 찾지 못했습니다"** 가 나왔다.
+       인자에 셸 특수문자가 없으면 셸 유무와 무관하게 안전하다 — 그걸 여기서 강제한다. */
+  const 특수문자 = /[;&|<>^()"']/;
+  T("★파이썬 설치 인자에 셸 특수문자가 없다",
+    gfy.설치.every((명) => 명.every((a) => !특수문자.test(a))));
+  T("★셸 특수문자 검사가 실제로 잡는다(뒤집어 확인)",
+    특수문자.test("import pip,sys;print(1)"));
+  T("★파이썬 후보에 윈도우 스토어 껍데기(python3)가 마지막이다",
+    !윈도우 || 파이썬후보()[파이썬후보().length - 1][0] === "python3");
+
+  /* ★검증축을 **양방향으로** 시험한다. 한 방향만 보면 "다 통과"가 곧 고장일 수 있다. */
+  const 유령2 = "절대없는스킬2-" + Date.now();
+  T("★검증축:'파일' 이면 목록에 없어도 완료로 본다(graphify 는 목록 축이 없다)",
+    상태({ 검증이름: 있는것 || "graphify", 검증축: "파일" }, { 이름들: [] }).등급 !== "반쪽");
+  T("★검증축:'파일' 이어도 파일이 없으면 '없음'이다(봐주지 않는다)",
+    상태({ 검증이름: 유령2, 검증축: "파일" }, { 이름들: [유령2] }).등급 === "없음");
+  T("★검증축을 선언 안 하면 여전히 두 축이다(기본값이 느슨해지지 않았다)",
+    상태({ 검증이름: 유령2 }, { 이름들: [유령2] }).등급 === "반쪽");
   /* ★2026-08-19 실사고: GSD 검증 이름을 `get-shit-done` 으로 뒀다가 **성공을 실패로 보고**했다.
      GSD 는 그 이름의 스킬을 만들지 않는다. 같은 실수를 다시 하지 않게 여기서 잡는다. */
   const gsd = 스킬들.find((x) => x.id === "gsd");
@@ -271,7 +374,7 @@ if (자기시험) {
 }
 
 /* ── 본 실행 ───────────────────────────────────────────────────────────── */
-console.log(`\n${c.b}클로드 코드 필수 스킬 5개${c[0]} ${c.d}— 설치하고, 진짜 되는지 확인합니다${c[0]}\n`);
+console.log(`\n${c.b}클로드 코드 필수 스킬 6개${c[0]} ${c.d}— 설치하고, 진짜 되는지 확인합니다${c[0]}\n`);
 
 const 막힌것 = 선행조건();
 if (막힌것.length) {
@@ -310,7 +413,24 @@ for (const [i, s] of 대상.entries()) {
   }
 
   console.log(`      ${c.d}설치 중…${c[0]}`);
-  const r = 돌리기(["-y", ...s.설치]);
+  let r;
+  if (s.설치기 === "python") {
+    /* ★파이썬 갈래. 명령이 **둘**이다(패키지 설치 → 스킬 심기). 앞이 실패하면 뒤를 돌리지 않는다 —
+       실패한 뒤에 심기를 시도하면 엉뚱한 에러가 나서 원인을 가린다. */
+    const py = 파이썬찾기();
+    if (!py) {
+      console.log(`      ${c.r}✗ 파이썬을 찾지 못했습니다${c[0]}`);
+      결과.push({ s, 등급: "실패",
+        설명: "파이썬 3 이 필요합니다 → https://python.org (윈도우는 설치 시 'Add to PATH' 체크)" });
+      continue;
+    }
+    for (const 명 of s.설치) {
+      r = 파이썬실행(py.cmd, [...py.pre, ...명], 900000);   //: 셸 없이 — 위 주석 참조
+      if (r.status !== 0) break;
+    }
+  } else {
+    r = 돌리기(["-y", ...s.설치]);
+  }
 
   /* ★★종료코드로 판정하지 않는다. 끝났으면 **다시 물어본다.** */
   목록 = 설치목록(true);
@@ -329,6 +449,96 @@ for (const [i, s] of 대상.entries()) {
   }
 }
 
+
+/* ── ⑥ 20만 스타 규칙 파일 — 프로젝트에 넣는다 ───────────────────────────
+   ★앞의 여섯은 **전역 스킬**(~/.claude/skills)이다. 이건 성격이 다르다 —
+     **지금 폴더의 CLAUDE.md** 다. 클로드 코드가 세션마다 자동으로 읽는 파일이라,
+     "AI 한테 뭘 하라고 시키는" 대신 "뭘 하지 말아야 할지"를 미리 깔아 두는 것이다.
+
+   ★출처를 화면에 적는다. 우리가 만든 게 아니다.
+     multica-ai/andrej-karpathy-skills — 별 20만 개. Andrej Karpathy 의
+     LLM 코딩 함정 관찰을 Forrest Chang 이 CLAUDE.md 한 장으로 정리한 것.
+
+   ★★**라이선스 표기가 없다.** 그래서 이 파일을 **동봉하지 않는다.**
+     설치할 때 원저작자 저장소에서 **직접 받는다.** 재배포가 아니라 대신 받아 주는 것이다.
+     (여섯 개 스킬에 쓰는 방침과 같다 — 공식 경로를 부를 뿐 파일을 싣지 않는다)
+
+   ★덮어쓰지 않는다. 이미 CLAUDE.md 가 있으면 **뒤에 덧붙인다.**
+     원저작자 README 가 안내하는 방식(curl ... >> CLAUDE.md)과 같고, 남의 규칙을 지우지 않는다.
+     이미 들어 있으면 아무것도 하지 않는다. */
+const 규칙 = {
+  이름: "카파시 규칙 (CLAUDE.md)",
+  출처: "multica-ai/andrej-karpathy-skills",
+  만든곳: "Forrest Chang · Andrej Karpathy 의 LLM 코딩 함정 관찰 기반",
+  라이선스: "라이선스 표기 없음 — 그래서 동봉하지 않고 원본에서 직접 받습니다",
+  주소: "https://raw.githubusercontent.com/multica-ai/andrej-karpathy-skills/main/CLAUDE.md",
+  표시: "https://github.com/multica-ai/andrej-karpathy-skills",
+  손으로: "curl https://raw.githubusercontent.com/multica-ai/andrej-karpathy-skills/main/CLAUDE.md >> CLAUDE.md",
+  표식: "Behavioral guidelines to reduce common LLM coding mistakes",
+};
+
+const 규칙건너뛰기 = 인자.includes("--skip-rules");
+
+async function 규칙깔기() {
+  if (규칙건너뛰기) return { 등급: "생략", 설명: "--skip-rules 로 건너뛰었습니다" };
+
+  const 여기폴더 = process.cwd();
+  //: 홈 폴더에 CLAUDE.md 를 만들면 모든 프로젝트에 딸려 들어간다. 그건 사용자가 원한 게 아니다.
+  if (여기폴더 === HOME) {
+    return { 등급: "생략", 설명: "지금 위치가 홈 폴더입니다. 프로젝트 폴더에서 다시 돌리세요",
+      손으로: 규칙.손으로 };
+  }
+
+  const 파일 = join(여기폴더, "CLAUDE.md");
+  const 있던것 = existsSync(파일) ? readFileSync(파일, "utf8") : null;
+
+  if (있던것 && 있던것.includes(규칙.표식)) {
+    return { 등급: "이미", 설명: "이미 들어 있습니다 (" + 파일 + ")" };
+  }
+  if (확인만) {
+    return { 등급: "필요",
+      설명: 있던것 ? "CLAUDE.md 는 있는데 규칙은 아직 없습니다" : "CLAUDE.md 가 아직 없습니다" };
+  }
+
+  let 본문;
+  try {
+    const r = await fetch(규칙.주소, { redirect: "follow" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    본문 = await r.text();
+  } catch (e) {
+    return { 등급: "실패", 설명: "원본을 못 받았습니다 (" + String(e.message || e).slice(0, 60) + ")",
+      손으로: 규칙.손으로 };
+  }
+
+  //: 받아온 게 진짜 그 파일인지 본다. 404 페이지를 저장하면 조용한 실패가 된다.
+  if (!본문.includes(규칙.표식)) {
+    return { 등급: "실패", 설명: "받아온 내용이 그 파일이 아닙니다", 손으로: 규칙.손으로 };
+  }
+
+  const 머리 =
+    "\n\n<!-- ─────────────────────────────────────────────────────────────\n" +
+    "  아래는 " + 규칙.출처 + " 의 CLAUDE.md 입니다 (별 20만 개).\n" +
+    "  " + 규칙.만든곳 + "\n" +
+    "  " + 규칙.표시 + "\n" +
+    "  리본랩스 설치기(npx reborn-skills)가 원본에서 받아 붙였습니다. 필요 없으면 이 아래를 지우세요.\n" +
+    "───────────────────────────────────────────────────────────── -->\n\n";
+
+  try {
+    writeFileSync(파일, (있던것 ? 있던것.replace(/\s*$/, "") : "") + 머리 + 본문, "utf8");
+  } catch (e) {
+    return { 등급: "실패", 설명: "쓰지 못했습니다 (" + String(e.message || e).slice(0, 60) + ")",
+      손으로: 규칙.손으로 };
+  }
+
+  //: 쓴 다음 **다시 읽어서** 확인한다. 쓰기 성공이 곧 들어간 것은 아니다.
+  const 확인 = existsSync(파일) ? readFileSync(파일, "utf8") : "";
+  if (!확인.includes(규칙.표식)) {
+    return { 등급: "실패", 설명: "썼는데 다시 읽으니 없습니다", 손으로: 규칙.손으로 };
+  }
+  return { 등급: "설치",
+    설명: 있던것 ? "기존 CLAUDE.md 뒤에 덧붙였습니다" : "새로 만들었습니다 (" + 파일 + ")" };
+}
+
 /* ── 요약 ─────────────────────────────────────────────────────────────── */
 const 센다 = (g) => 결과.filter((x) => x.등급 === g).length;
 const 된것 = 센다("설치") + 센다("이미");
@@ -336,6 +546,17 @@ console.log(`\n${"─".repeat(58)}`);
 for (const x of 결과) {
   const mark = { 설치: c.g + "✓", 이미: c.g + "✓", 필요: c.y + "·", 반쪽: c.y + "△", 실패: c.r + "✗" }[x.등급];
   console.log(`  ${mark}${c[0]} ${x.s.이름.padEnd(20)} ${c.d}${x.설명}${c[0]}`);
+}
+
+/* ⑦ 규칙 파일 — 여섯 개와 나란히 한 줄로 보고한다 */
+const 규칙결과 = await 규칙깔기();
+{
+  const mark = { 설치: c.g + "✓", 이미: c.g + "✓", 필요: c.y + "·",
+                 생략: c.d + "-", 실패: c.r + "✗" }[규칙결과.등급] || (c.d + "-");
+  console.log(`  ${mark}${c[0]} ${규칙.이름.padEnd(20)} ${c.d}${규칙결과.설명}${c[0]}`);
+  console.log(`    ${c.d}출처 ${규칙.출처} · 별 20만 · ${규칙.만든곳}${c[0]}`);
+  console.log(`    ${c.d}${규칙.라이선스}${c[0]}`);
+  if (규칙결과.손으로) console.log(`    ${c.cy}직접 돌릴 명령:${c[0]}  ${규칙결과.손으로}`);
 }
 
 if (확인만) {
@@ -437,15 +658,15 @@ function 안내스킬심기(문) {
 if (된것 > 0) {
   안내스킬심기({
     명령: "reborn-skills",
-    줄: "- **스킬 5개** (`npx reborn-skills`) — agent-browser · find-skills · GSD · design-taste-frontend · mcp-builder.\n  브라우저 조작 · 스킬 탐색 · 작업 분해 · 디자인 · MCP 연결.",
+    줄: "- **스킬 6개** (`npx reborn-skills`) — agent-browser · find-skills · GSD · design-taste-frontend · mcp-builder · **graphify**.\n  브라우저 조작 · 스킬 탐색 · 작업 분해 · 디자인 · MCP 연결 · **코드베이스 지식그래프**.",
   });
   const 킷 = "https://rebornlabs.kr/claudekit?utm_source=installer&utm_medium=cli&utm_campaign=skill5";
   console.log(`${c.d}${"\u2500".repeat(58)}${c[0]}`);
-  console.log(`${c.d}방금 깐 다섯 개는 클로드를 잘 돌게 만드는 것입니다. 엔진을 손본 겁니다.${c[0]}`);
+  console.log(`${c.d}방금 깐 여섯 개는 클로드를 잘 돌게 만드는 것입니다. 엔진을 손본 겁니다.${c[0]}`);
   console.log(`${c.d}그다음 남는 질문은 대개 하나입니다 \u2014 ${c[0]}${c.b}"그래서 이걸로 뭘 자동으로 돌리지?"${c[0]}`);
   console.log(`\n${c.b}리본랩스 클로드킷${c[0]}${c.d} \u2014 블로그·스레드·유튜브·인스타·음악 다섯 채널을 사람 없이 발행합니다.${c[0]}`);
   console.log(`${c.cy}${킷}${c[0]}`);
-  console.log(`${c.d}설치기는 무료입니다. 안 사셔도 다섯 개는 그대로 쓰시면 됩니다.${c[0]}\n`);
+  console.log(`${c.d}설치기는 무료입니다. 안 사셔도 여섯 개는 그대로 쓰시면 됩니다.${c[0]}\n`);
 }
 
 console.log(`${c.d}막히시면 화면을 그대로 캡처해 보내 주세요 — https://mobility.rebornlabs.kr/cs${c[0]}\n`);

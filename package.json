@@ -1,7 +1,7 @@
 {
   "name": "reborn-skills",
-  "version": "1.1.2",
-  "description": "클로드 코드 필수 스킬 5개를 한 번에 설치하고, 진짜 되는지 확인까지 합니다 — agent-browser · find-skills · GSD · taste · mcp-builder",
+  "version": "1.2.0",
+  "description": "클로드 코드 필수 스킬 6개를 한 번에 설치하고, 진짜 되는지 확인까지 합니다 — agent-browser · find-skills · GSD · taste · mcp-builder · graphify",
   "keywords": [
     "claude",
     "claude-code",
@@ -9,7 +9,9 @@
     "agent-skills",
     "installer",
     "agent-browser",
-    "mcp"
+    "mcp",
+    "graphify",
+    "knowledge-graph"
   ],
   "homepage": "https://rebornlabs.kr",
   "bugs": {
