@@ -28,6 +28,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import https from "node:https";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -502,9 +503,7 @@ async function 규칙깔기() {
 
   let 본문;
   try {
-    const r = await fetch(규칙.주소, { redirect: "follow" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    본문 = await r.text();
+    본문 = await 받아오기(규칙.주소);
   } catch (e) {
     return { 등급: "실패", 설명: "원본을 못 받았습니다 (" + String(e.message || e).slice(0, 60) + ")",
       손으로: 규칙.손으로 };
@@ -537,6 +536,32 @@ async function 규칙깔기() {
   }
   return { 등급: "설치",
     설명: 있던것 ? "기존 CLAUDE.md 뒤에 덧붙였습니다" : "새로 만들었습니다 (" + 파일 + ")" };
+}
+
+/** 한 파일 받아오기 — **`fetch` 를 쓰지 않는다.**
+ *  ★윈도우에서 `fetch`(undici)가 남긴 연결이 spawnSync 핸들과 겹치면, 프로세스가 끝나는 순간
+ *    `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` 가 **마지막 줄로** 찍힌다.
+ *    일은 다 끝났고 종료코드도 0 인데, 고객 눈에는 설치가 실패한 것으로 보인다(2026-08-21 실측).
+ *    `fetch` 만 돌리면 안 나고, spawnSync 와 같이 돌 때만 난다 — 그래서 **연결 주인을 바꾼다.**
+ *  ★`node:https` 는 undici 를 안 탄다. 리다이렉트만 손으로 따라가면 된다(깃허브 raw 는 1~2회). */
+function 받아오기(주소, 남은 = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(주소, { headers: { "user-agent": "reborn-skills", connection: "close" } }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        if (남은 <= 0) return reject(new Error("리다이렉트가 너무 많습니다"));
+        return resolve(받아오기(new URL(res.headers.location, 주소).href, 남은 - 1));
+      }
+      if (code !== 200) { res.resume(); return reject(new Error("HTTP " + code)); }
+      let buf = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { buf += c; });
+      res.on("end", () => resolve(buf));
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(new Error("시간 초과")); });
+  });
 }
 
 /* ── 요약 ─────────────────────────────────────────────────────────────── */
