@@ -10,12 +10,24 @@
 터미널을 쓰신다면 이 한 줄이 같은 일을 합니다.
 
 ```
-npx reborn-skills            설치 + 확인
-npx reborn-skills --check    설치하지 않고 지금 상태만
-npx reborn-skills --only gsd 하나만
+npx --yes reborn-skills            설치 + 확인
+npx --yes reborn-skills --check    설치하지 않고 지금 상태만
+npx --yes reborn-skills --only gsd 하나만
 ```
 
 내려받은 폴더 안에서는 `node install.mjs` 도 같습니다.
+
+### 준비물 두 가지
+
+| 무엇 | 없으면 | 설치 |
+|---|---|---|
+| **Node.js 18 이상** | `npx` 를 모르는 명령이라고 합니다 | <https://nodejs.org> |
+| **git** | 스킬이 **한 개도 안 깔립니다** — 전부 「실패」로 나옵니다 | 윈도우 `winget install --id Git.Git -e --source winget` · 맥 `xcode-select --install` |
+
+스킬을 내려받는 일은 속에서 git 이 합니다. **윈도우에는 git 이 기본으로 안 깔려 있습니다.**
+깐 뒤에는 **검은 창을 닫고 새로 여세요** — 열려 있던 창은 옛 환경을 그대로 들고 있어서, 깔고도 똑같이 실패합니다.
+
+설치기가 시작할 때 이 둘을 먼저 봅니다. 없으면 아무것도 하지 않고 멈춥니다.
 
 ## 무엇을 깔아드리나요
 
@@ -23,12 +35,25 @@ npx reborn-skills --only gsd 하나만
 |---|---|---|---|
 | `agent-browser` | 클로드에게 진짜 브라우저를 준다 — 클릭·페이지 열기·사용자처럼 테스트 | Vercel Labs | Apache-2.0 |
 | `find-skills` | 만들 걸 말하면 스킬을 전부 뒤져 맞는 걸 찾아준다 | Vercel Labs | MIT |
-| `gsd-*` (GSD) | 긴 대화에서 길 잃지 않게 작업을 잘게 쪼갠다 | OpenGSD | MIT |
+| `gsd-*` (GSD) — **스킬 폴더 70여 개** | 긴 대화에서 길 잃지 않게 작업을 잘게 쪼갠다 | OpenGSD | MIT |
 | `design-taste-frontend` | AI 티 나는 디자인 탈출 — 애니메이션까지 있는 미려한 웹 | Leonxlnx | MIT |
 | `mcp-builder` | 연결할 도구만 알려주면 몇 분 만에 클로드와 붙여준다 | **Anthropic 공식** | Apache-2.0 |
 | `graphify` | 코드베이스 전체를 지식그래프로 만들어, 뒤지는 대신 물어보게 한다 — `/graphify` | Graphify Labs | Apache-2.0 |
 
 **전부 남이 만든 것입니다.** 리본랩스는 **설치와 확인만** 대신 해드립니다.
+
+> ### 몇 개가 깔리는지 먼저 말씀드립니다
+> 위 여섯 중 **다섯은 스킬 폴더를 정확히 하나씩** 만듭니다.
+> **GSD 하나만 다릅니다** — `gsd-new-project`·`gsd-plan-phase` 처럼 `gsd-` 로 시작하는
+> 스킬을 **70여 개 한 덩어리로** 심습니다(2026-08-24 실측 71개).
+> GSD 를 그렇게 만든 것이라 우리가 쪼갤 수 없습니다. 그래서 개수를 화면에 적고,
+> 원치 않으시면 뺄 수 있게 했습니다.
+>
+> ```
+> npx --yes reborn-skills --skip gsd
+> ```
+>
+> 빼시면 나머지 다섯 개, 즉 **스킬 폴더 5개**만 깔립니다.
 
 > `graphify` 하나만 파이썬 패키지입니다(`pip install graphifyy` → `graphify install`).
 > 이 설치기가 **파이썬을 직접 찾아** 대신 돌립니다 — 윈도우에서 `graphify` 가 PATH 에 안 잡히는

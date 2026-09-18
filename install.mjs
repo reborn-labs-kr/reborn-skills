@@ -5,7 +5,15 @@
  *   node install.mjs              설치 + 검증
  *   node install.mjs --check      설치하지 않고 지금 상태만 본다
  *   node install.mjs --only gsd   하나만
+ *   node install.mjs --skip gsd   그것만 빼고 (여러 개면 쉼표)
  *   node install.mjs --self-test  검사기 자체 시험(설치 안 함)
+ *
+ * ★★**몇 개가 깔리는지 화면에 적는다.**
+ *   여섯 중 다섯은 스킬 폴더를 정확히 하나씩 만든다. GSD 하나만 다르다 —
+ *   자기 설치기가 `gsd-*` 를 **70여 개 한 덩어리로** 심는다. 쪼갤 방법이 없다.
+ *   그걸 안 적으면 우리는 "6개"라고 말하고 76개를 깔게 된다. 고객이 고른 적 없는 70개다.
+ *   그래서 ① 설치 전에 개수를 적고 ② `--skip gsd` 로 뺄 길을 준다.
+ *   (2026-08-24 실측: 이 PC 스킬 90개 중 71개가 gsd-*)
  *
  * ★★왜 이걸 만드나
  *   남들은 "이거 설치하세요" 목록을 준다. 고객은 여섯 번 설치하고,
@@ -39,6 +47,14 @@ const 인자 = process.argv.slice(2);
 const 확인만 = 인자.includes("--check");
 const 자기시험 = 인자.includes("--self-test");
 const 하나만 = (() => { const i = 인자.indexOf("--only"); return i >= 0 ? 인자[i + 1] : null; })();
+/** `--skip gsd` · `--skip gsd,taste` — 뺄 것. 없는 이름을 적으면 아래에서 잡아 준다. */
+export const 건너뛰기파싱 = (a) => {
+  const 모음 = [];
+  for (let i = 0; i < a.length; i++) if (a[i] === "--skip" && a[i + 1] && !a[i + 1].startsWith("--"))
+    모음.push(...a[i + 1].split(",").map((x) => x.trim()).filter(Boolean));
+  return 모음;
+};
+const 건너뛴다 = 건너뛰기파싱(인자);
 
 const c = { g: "\x1b[32m", r: "\x1b[31m", y: "\x1b[33m", d: "\x1b[90m", cy: "\x1b[36m", b: "\x1b[1m", 0: "\x1b[0m" };
 const 원 = (n) => Number(n).toLocaleString("ko-KR");
@@ -54,7 +70,10 @@ const 스킬들 = [
     출처: "vercel-labs/agent-browser",
     만든곳: "Vercel Labs",
     라이선스: "Apache-2.0",
-    설치: ["skills", "add", "vercel-labs/agent-browser", "-g", "-a", "claude-code", "-y"],
+    /* ★`--skill` 로 못 박는다. 2026-08-24 확인 시점에 이 저장소의 skills/ 에는 agent-browser 하나뿐이라
+         안 박아도 결과는 같았다. 그래도 박는 이유는 **남의 저장소이기 때문**이다 —
+         Vercel 이 스킬을 하나 더 넣는 날, 우리 설치기는 고객이 고른 적 없는 것을 조용히 깐다. */
+    설치: ["skills", "add", "vercel-labs/agent-browser", "--skill", "agent-browser", "-g", "-a", "claude-code", "-y"],
     검증이름: "agent-browser",
   },
   {
@@ -81,6 +100,9 @@ const 스킬들 = [
          `get-shit-done` 을 찾다가 **성공한 설치를 실패로 보고했다** — 그게 제일 나쁜 오답이다
          (고객은 다시 돌리고, 또 실패로 보고, 우리를 못 믿게 된다). */
     설치: ["@opengsd/gsd-core@latest"],
+    /* ★★여섯 중 **유일하게 한 덩어리**다. 화면에 개수를 적는다(2026-08-24 실측 71개).
+         숫자는 GSD 판올림마다 달라진다 — 그래서 "여" 를 붙여 어림수로 말한다. */
+    덩어리: "gsd-* 스킬 70여 개가 한 덩어리로 들어옵니다 (2026-08-24 실측 71개). GSD 는 쪼개 깔 수 없습니다 — 빼려면 --skip gsd",
     검증이름: "gsd-new-project",
     검증대안: ["gsd-help", "gsd-next", "gsd-progress"],
     손으로: "npx @opengsd/gsd-core@latest",
@@ -259,12 +281,31 @@ function 돌리기(args, timeout = 600000) {
 }
 
 /* ── 선행 조건 ─────────────────────────────────────────────────────────── */
-export function 선행조건() {
+/* ★`git명령` 을 인자로 받는다. 시험이 **git 이 깔린 PC 에서도** 「없을 때」를 재려면
+   없는 상태를 실제로 만들 수 있어야 한다. 기본값은 진짜 명령이라 본 실행은 그대로다. */
+export function 선행조건(git명령 = "git") {
   const 탈 = [];
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 18) 탈.push(`Node 가 ${process.versions.node} 입니다. 18 이상이 필요합니다 → https://nodejs.org`);
   const r = spawnSync(npx(), ["--version"], { encoding: "utf8", timeout: 60000, windowsHide: true, shell: 셸필요() });
   if (r.status !== 0) 탈.push("npx 를 실행하지 못했습니다. Node.js 를 다시 설치해 주세요.");
+  /* ★★git 이 없으면 **한 종도 안 깔린다.** 속 도구 `skills` 가 simple-git 으로
+       시스템 `git` 실행파일을 불러 레포를 clone 하기 때문이다.
+       윈도우에는 git 이 기본으로 안 깔려 있다 — 드문 일이 아니라 **흔한 첫 실행**이다.
+     ★여기서 안 막으면 빨간 「실패」만 줄줄이 내려가고 이유는 아무 데도 안 적힌다
+       (2026-09-18 유료판에서 실제로 난 일. 48종이 전부 떨어졌다). */
+  const g = spawnSync(git명령, ["--version"], { encoding: "utf8", timeout: 60000, windowsHide: true, shell: 셸필요() });
+  if (g.status !== 0) {
+    탈.push(
+      "git 이 없습니다. 스킬을 내려받는 데 git 이 꼭 필요합니다 — 이것 없이는 한 종도 깔리지 않습니다.\n"
+      + (process.platform === "win32"
+        ? "    설치: 명령 프롬프트에 winget install --id Git.Git -e --source winget\n"
+          + "    ★깐 뒤에는 이 검은 창을 닫고 새로 열어야 합니다. 열려 있던 창은 옛 환경을 그대로 들고 있습니다."
+        : process.platform === "darwin"
+          ? "    설치: xcode-select --install  (또는 brew install git)"
+          : "    설치: sudo apt install git  (또는 각 배포판의 패키지 관리자)")
+    );
+  }
   if (!existsSync(join(HOME, ".claude"))) {
     // 없어도 설치는 되지만, 클로드 코드를 한 번도 안 켠 상태다 — 미리 말해 준다.
     탈.push("~/.claude 폴더가 없습니다. 클로드 코드를 한 번 실행한 뒤 다시 돌려 주세요.");
@@ -349,6 +390,29 @@ if (자기시험) {
   T("★GSD 를 'get-shit-done' 으로 찾지 않는다",
     ![gsd.검증이름, ...(gsd.검증대안 || [])].includes("get-shit-done"));
 
+  /* ★2026-08-24: "6개"라고 광고하고 76개를 깔고 있었다(실측: 스킬 90개 중 71개가 gsd-*).
+     GSD 는 자기 설치기가 한 덩어리로 심어서 우리가 쪼갤 수 없다. 쪼갤 수 없으면
+     **적어도 몇 개인지는 말해야 한다.** 그 문구가 사라지는 순간 다시 거짓말이 된다. */
+  T("★GSD 는 덩어리라고 화면에 적는다", typeof gsd.덩어리 === "string" && gsd.덩어리.length > 10);
+  T("★그 문구가 개수와 빼는 법을 둘 다 말한다",
+    /\d/.test(gsd.덩어리 || "") && (gsd.덩어리 || "").includes("--skip"));
+  //: 나머지 다섯은 --skill 로 하나씩 못 박혀 있어야 한다. 못 박히지 않은 게 새로 들어오면
+  //  그건 또 다른 덩어리다 — 덩어리 고지 없이는 통과시키지 않는다.
+  T("★덩어리 고지가 없는 항목은 전부 스킬 하나만 깐다", 스킬들.every((x) => {
+    if (x.덩어리) return true;
+    if (x.설치기 === "python") return true;              // graphify — 자기 CLI, 스킬 1개
+    const 평평 = JSON.stringify(x.설치);
+    return !평평.includes('"skills"') || 평평.includes('"--skill"');
+  }));
+
+  /* ★--skip 은 "뺐다고 생각했는데 깔렸다"를 막는 장치다. 파서가 조용히 죽으면 그 사고가 난다. */
+  T("★--skip 이 하나를 뺀다", 건너뛰기파싱(["--skip", "gsd"]).join() === "gsd");
+  T("★--skip 이 쉼표로 여러 개를 뺀다",
+    건너뛰기파싱(["--skip", "gsd,taste"]).join() === "gsd,taste");
+  T("★--skip 뒤에 값이 없으면 아무것도 빼지 않는다(조용히 전부 빼지 않는다)",
+    건너뛰기파싱(["--skip", "--check"]).length === 0);
+  T("★--skip 을 안 쓰면 빈 목록이다", 건너뛰기파싱(["--check"]).length === 0);
+
   /* ★안내 스킬은 **배송에서 빠지기 쉬운 물건**이다. package.json 의 files 에서 빠지면
      npm 으로 받은 사람에게는 파일이 아예 없고, 그래도 설치는 조용히 성공한다(에러가 안 난다).
      "왜 안내가 안 뜨지"를 몇 주 뒤에 알게 되는 종류라 여기서 막는다. */
@@ -367,6 +431,15 @@ if (자기시험) {
     return (JSON.parse(readFileSync(pj, "utf8")).files || []).includes("안내스킬.md");
   })());
 
+  /* ★git 검사 (2026-09-18 유료판 사고 뒤 여기에도 넣었다).
+     ★★없는 상태를 **실제로 만들어** 잰다. `git 있나 ? …` 로 가르면 git 이 깔린 PC 에서는
+       검사를 통째로 죽여도 전건 초록이다 — 아무것도 안 재는 관문이 된다. */
+  const git탈뽑기 = (명령) => 선행조건(명령).filter((t) => t.startsWith("git 이 없습니다"));
+  T("★git 이 없으면 막는다", git탈뽑기("gitzzz-없는명령").length === 1);
+  T("★git 이 있으면 안 막는다", git탈뽑기("git").length === 0);
+  T("★안내에 설치 명령이 들어 있다",
+    /winget|brew|apt|xcode-select/.test(git탈뽑기("gitzzz-없는명령")[0] || ""));
+
   const 실패 = 시험.filter(([, ok]) => !ok);
   for (const [n, ok] of 시험) console.log(`  ${ok ? c.g + "✓" : c.r + "✗"}${c[0]} ${n}`);
   if (실패.length) { console.error(`\n${c.r}✗ 자기시험 ${실패.length}건 실패${c[0]}`); process.exit(1); }
@@ -376,6 +449,13 @@ if (자기시험) {
 
 /* ── 본 실행 ───────────────────────────────────────────────────────────── */
 console.log(`\n${c.b}클로드 코드 필수 스킬 6개${c[0]} ${c.d}— 설치하고, 진짜 되는지 확인합니다${c[0]}\n`);
+/* ★한 줄로 총량을 먼저 밝힌다. 요약에만 두면 이미 다 깔린 뒤에 읽게 된다. */
+{
+  const 덩어리들 = 스킬들.filter((s) => s.덩어리 && !건너뛴다.includes(s.id));
+  if (덩어리들.length)
+    console.log(`${c.y}※ 이 중 ${덩어리들.map((s) => s.이름).join("·")} 은 스킬 폴더를 여러 개 만듭니다 — 아래에 개수를 적었습니다.${c[0]}`);
+}
+console.log("");
 
 const 막힌것 = 선행조건();
 if (막힌것.length) {
@@ -385,8 +465,19 @@ if (막힌것.length) {
   process.exit(2);
 }
 
-const 대상 = 하나만 ? 스킬들.filter((s) => s.id === 하나만) : 스킬들;
-if (!대상.length) { console.error(`${c.r}✗ 그런 스킬이 없습니다: ${하나만}${c[0]}`); process.exit(2); }
+const 없는이름 = 건너뛴다.filter((id) => !스킬들.some((s) => s.id === id));
+if (없는이름.length) {
+  //: 오타를 조용히 무시하면 "뺐다고 생각했는데 깔렸다"가 된다. 그게 제일 나쁘다.
+  console.error(`${c.r}✗ --skip 에 그런 이름이 없습니다: ${없는이름.join(", ")}${c[0]}`);
+  console.error(`${c.d}  쓸 수 있는 이름: ${스킬들.map((s) => s.id).join(" · ")}${c[0]}
+`);
+  process.exit(2);
+}
+const 대상 = (하나만 ? 스킬들.filter((s) => s.id === 하나만) : 스킬들)
+  .filter((s) => !건너뛴다.includes(s.id));
+if (!대상.length) { console.error(`${c.r}✗ 깔 것이 없습니다${하나만 ? `: ${하나만}` : ""}${c[0]}`); process.exit(2); }
+if (건너뛴다.length)
+  console.log(`${c.d}건너뜁니다 — ${스킬들.filter((s) => 건너뛴다.includes(s.id)).map((s) => s.이름).join(" · ")}${c[0]}`);
 
 console.log(`${c.d}지금 상태를 봅니다…${c[0]}`);
 let 목록 = 설치목록();
@@ -398,6 +489,7 @@ for (const [i, s] of 대상.entries()) {
 
   console.log(`\n${c.cy}${번호} ${s.이름}${c[0]}  ${c.d}${s.한줄}${c[0]}`);
   console.log(`      ${c.d}출처 ${s.출처} · ${s.만든곳} · ${s.라이선스}${c[0]}`);
+  if (s.덩어리) console.log(`      ${c.y}※ ${s.덩어리}${c[0]}`);
   if (s.주의) console.log(`      ${c.y}⚠ ${s.주의}${c[0]}`);
 
   if (전.등급 === "완료") {
@@ -519,7 +611,7 @@ async function 규칙깔기() {
     "  아래는 " + 규칙.출처 + " 의 CLAUDE.md 입니다 (별 20만 개).\n" +
     "  " + 규칙.만든곳 + "\n" +
     "  " + 규칙.표시 + "\n" +
-    "  리본랩스 설치기(npx reborn-skills)가 원본에서 받아 붙였습니다. 필요 없으면 이 아래를 지우세요.\n" +
+    "  리본랩스 설치기(npx --yes reborn-skills)가 원본에서 받아 붙였습니다. 필요 없으면 이 아래를 지우세요.\n" +
     "───────────────────────────────────────────────────────────── -->\n\n";
 
   try {
@@ -571,7 +663,10 @@ console.log(`\n${"─".repeat(58)}`);
 for (const x of 결과) {
   const mark = { 설치: c.g + "✓", 이미: c.g + "✓", 필요: c.y + "·", 반쪽: c.y + "△", 실패: c.r + "✗" }[x.등급];
   console.log(`  ${mark}${c[0]} ${x.s.이름.padEnd(20)} ${c.d}${x.설명}${c[0]}`);
+  if (x.s.덩어리) console.log(`    ${c.y}※ ${x.s.덩어리}${c[0]}`);
 }
+for (const s of 스킬들.filter((s) => 건너뛴다.includes(s.id)))
+  console.log(`  ${c.d}- ${s.이름.padEnd(20)} --skip 으로 건너뛰었습니다${c[0]}`);
 
 /* ⑦ 규칙 파일 — 여섯 개와 나란히 한 줄로 보고한다 */
 const 규칙결과 = await 규칙깔기();
@@ -639,6 +734,13 @@ function 안내스킬심기(문) {
     const 파일 = join(폴더, "SKILL.md");
     const 기존 = existsSync(파일) ? readFileSync(파일, "utf8") : "";
 
+    /* ★★구매자 판이 이미 있으면 **건드리지 않는다.** (2026-08-24 계단 ②)
+       스킬팩을 산 사람의 안내는 클로드킷을 가리키는 다음 칸이다. 여기서 덮으면
+       **이미 산 스킬팩을 다시 권하는 화면으로 되돌아간다** — 그 순간 신뢰가 깎이고,
+       같이 깐 48종까지 통째로 지워진다. 계단은 내려가지 않는다.
+       ★이번 문(門)을 못 적는 손해는 있지만, 되파는 사고보다 훨씬 싸다. */
+    if (기존.includes("reborn:구매자판:스킬팩")) return true;
+
     const 문들 = [];
     const m = 기존.match(/<!-- reborn:문들:시작 -->([^]*?)<!-- reborn:문들:끝 -->/);
     if (m) for (const 줄 of m[1].trim().split(/\n(?=- )/)) if (줄.trim()) 문들.push(줄.trim());
@@ -652,8 +754,15 @@ function 안내스킬심기(문) {
     const 링크 = "https://rebornlabs.kr/claudekit?utm_source=skill&utm_medium=claude" +
       "&utm_campaign=guide-skill&utm_content=" + 문표;
 
+    /* ★스킬팩(8,900원) 링크. 클로드킷(158,000원)보다 **먼저** 닿아야 한다 —
+       무료 다음 칸이 곧바로 158,000원이라 아무도 못 건넜다(실측: 판매 페이지까지 간 10명 중 0명).
+       같은 문표를 실어 **어느 무료 미끼에서 온 사람인지** 함께 센다. */
+    const 스킬팩링크 = "https://rebornlabs.kr/skillpack?utm_source=skill&utm_medium=claude" +
+      "&utm_campaign=guide-skill&utm_content=" + 문표;
+
     const 본문 = readFileSync(원본, "utf8")
       .replace("{{문들}}", 문들.join("\n"))
+      .replace("{{스킬팩링크}}", 스킬팩링크)
       .replace("{{링크}}", 링크);
 
     mkdirSync(폴더, { recursive: true });
@@ -683,15 +792,24 @@ function 안내스킬심기(문) {
 if (된것 > 0) {
   안내스킬심기({
     명령: "reborn-skills",
-    줄: "- **스킬 6개** (`npx reborn-skills`) — agent-browser · find-skills · GSD · design-taste-frontend · mcp-builder · **graphify**.\n  브라우저 조작 · 스킬 탐색 · 작업 분해 · 디자인 · MCP 연결 · **코드베이스 지식그래프**.",
+    줄: "- **스킬 6개** (`npx --yes reborn-skills`) — agent-browser · find-skills · GSD · design-taste-frontend · mcp-builder · **graphify**.\n  브라우저 조작 · 스킬 탐색 · 작업 분해 · 디자인 · MCP 연결 · **코드베이스 지식그래프**.",
   });
-  const 킷 = "https://rebornlabs.kr/claudekit?utm_source=installer&utm_medium=cli&utm_campaign=skill5";
-  console.log(`${c.d}${"\u2500".repeat(58)}${c[0]}`);
-  console.log(`${c.d}방금 깐 여섯 개는 클로드를 잘 돌게 만드는 것입니다. 엔진을 손본 겁니다.${c[0]}`);
-  console.log(`${c.d}그다음 남는 질문은 대개 하나입니다 \u2014 ${c[0]}${c.b}"그래서 이걸로 뭘 자동으로 돌리지?"${c[0]}`);
-  console.log(`\n${c.b}리본랩스 클로드킷${c[0]}${c.d} \u2014 블로그·스레드·유튜브·인스타·음악 다섯 채널을 사람 없이 발행합니다.${c[0]}`);
-  console.log(`${c.cy}${킷}${c[0]}`);
-  console.log(`${c.d}설치기는 무료입니다. 안 사셔도 여섯 개는 그대로 쓰시면 됩니다.${c[0]}\n`);
+  /* ★★가리키는 곳을 158,000원 → 8,900원으로 내렸다 (2026-08-24).
+       실측: 무료를 받고 판매 페이지까지 간 사람 10명 중 주문 0명.
+       관심이 없었던 게 아니라 무료(0원) 다음 칸이 곧바로 158,000원이라 못 건넌 것이다.
+       자비스는 스킬팩을 산 사람에게 민다(결제완료 화면·메일). 그래야 계단이 생긴다.
+     ★첫 줄은 방금 한 일에서 이어져야 한다. "저희 다른 제품도 있어요"는 광고고,
+       "방금 하신 그 일의 다음 칸입니다"는 안내다. 그래서 설치기마다 첫 줄이 다르다.
+     ★마지막 줄이 이 한 칸을 광고가 아니게 만든다 — 목록도 설치 명령도 다 공개돼 있다.
+     ★문안 정본은 skillpack/tail_copy.mjs 다. */
+  const 팩 = "https://rebornlabs.kr/skillpack?utm_source=installer&utm_medium=cli&utm_campaign=skill5";
+  console.log(`${c.d}${"─".repeat(58)}${c[0]}`);
+  console.log(`${c.d}방금 여섯 개를 골라 드렸습니다. 고르는 게 일의 절반입니다 —${c[0]}`);
+  console.log(`${c.d}추천 목록을 그대로 다 깔면 스킬이 182개가 되고, 그 설명이 대화마다 실립니다.${c[0]}`);
+  console.log(`
+${c.b}리본랩스 스킬팩${c[0]}${c.d} — 같은 방식으로 고른 48종을 한 줄로. 8,900원${c[0]}`);
+  console.log(`${c.cy}${팩}${c[0]}`);
+  console.log(`${c.d}목록과 직접 까는 명령까지 그 페이지에 그대로 적어 두었습니다. 안 사셔도 됩니다.${c[0]}`);
 }
 
 console.log(`${c.d}막히시면 화면을 그대로 캡처해 보내 주세요 — https://mobility.rebornlabs.kr/cs${c[0]}\n`);
